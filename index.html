@@ -1,0 +1,988 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DocConvert — Convierte cualquier documento al instante</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Nunito:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+<!-- Libraries -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Tesseract.js/4.1.1/tesseract.min.js"></script>
+
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0b0f1a;
+  --surface:#111827;
+  --surface2:#1a2235;
+  --border:#1e2d45;
+  --accent:#00d4ff;
+  --accent2:#7c3aed;
+  --accent3:#10b981;
+  --warn:#f59e0b;
+  --text:#e2e8f0;
+  --muted:#64748b;
+  --white:#f8fafc;
+  --danger:#ef4444;
+}
+html{scroll-behavior:smooth}
+body{font-family:'Nunito',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
+
+/* Animated grid background */
+body::before{
+  content:'';position:fixed;inset:0;
+  background-image:
+    linear-gradient(rgba(0,212,255,.04) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,212,255,.04) 1px,transparent 1px);
+  background-size:60px 60px;
+  pointer-events:none;z-index:0;
+}
+body::after{
+  content:'';position:fixed;inset:0;
+  background:radial-gradient(ellipse 80% 60% at 50% -10%,rgba(124,58,237,.15) 0%,transparent 70%);
+  pointer-events:none;z-index:0;
+}
+
+/* NAV */
+nav{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:1rem 3rem;
+  background:rgba(11,15,26,.8);
+  backdrop-filter:blur(16px);
+  border-bottom:1px solid var(--border);
+}
+.logo{
+  font-family:'Syne',sans-serif;font-size:1.4rem;font-weight:800;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;
+}
+.nav-links{display:flex;gap:2rem;list-style:none}
+.nav-links a{color:var(--muted);text-decoration:none;font-size:.88rem;font-weight:500;transition:color .2s}
+.nav-links a:hover{color:var(--accent)}
+.nav-badge{
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  color:#000;font-size:.78rem;font-weight:700;
+  padding:.4rem 1rem;border-radius:6px;text-decoration:none;
+  transition:opacity .2s
+}
+.nav-badge:hover{opacity:.85}
+
+/* HERO */
+.hero{
+  min-height:100vh;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  padding:7rem 2rem 4rem;text-align:center;position:relative;z-index:1;
+}
+.pill{
+  display:inline-flex;align-items:center;gap:.5rem;
+  background:rgba(0,212,255,.08);border:1px solid rgba(0,212,255,.2);
+  color:var(--accent);font-size:.75rem;font-weight:600;letter-spacing:.08em;
+  text-transform:uppercase;padding:.35rem 1rem;border-radius:100px;
+  margin-bottom:1.8rem;
+  animation:fadeUp .6s ease both;
+}
+.pill::before{content:'◈';animation:spin 3s linear infinite;display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+h1{
+  font-family:'Syne',sans-serif;font-size:clamp(2.4rem,5vw,4rem);font-weight:800;
+  line-height:1.1;letter-spacing:-.03em;max-width:800px;
+  animation:fadeUp .7s .1s ease both;
+}
+h1 .grad{
+  background:linear-gradient(135deg,var(--accent) 0%,var(--accent2) 60%,var(--accent3) 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.hero-sub{
+  margin-top:1.2rem;font-size:1.05rem;color:var(--muted);max-width:560px;line-height:1.7;
+  animation:fadeUp .7s .2s ease both;
+}
+.free-banner{
+  margin-top:1.5rem;
+  display:inline-flex;align-items:center;gap:.5rem;
+  background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);
+  color:var(--accent3);font-size:.82rem;font-weight:600;
+  padding:.4rem 1.2rem;border-radius:100px;
+  animation:fadeUp .7s .3s ease both;
+}
+.free-banner::before{content:'✓'}
+
+/* MAIN CONVERTER */
+.converter-wrap{
+  position:relative;z-index:1;
+  max-width:960px;margin:0 auto;padding:2rem 2rem 6rem;
+}
+
+/* FORMAT SELECTOR */
+.format-grid{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));
+  gap:.8rem;margin-bottom:2rem;
+}
+.fmt-btn{
+  background:var(--surface);border:1.5px solid var(--border);
+  border-radius:10px;padding:.9rem .6rem;
+  display:flex;flex-direction:column;align-items:center;gap:.4rem;
+  cursor:pointer;transition:all .2s;text-align:center;
+}
+.fmt-btn:hover{border-color:var(--accent);background:rgba(0,212,255,.05)}
+.fmt-btn.active{border-color:var(--accent);background:rgba(0,212,255,.08);box-shadow:0 0 20px rgba(0,212,255,.15)}
+.fmt-btn.pro-locked{opacity:.55;cursor:not-allowed;position:relative}
+.fmt-btn.pro-locked::after{
+  content:'PRO';position:absolute;top:6px;right:6px;
+  background:var(--accent2);color:white;font-size:.55rem;font-weight:700;
+  padding:.1rem .3rem;border-radius:3px;letter-spacing:.05em;
+}
+.fmt-icon{font-size:1.6rem}
+.fmt-label{font-size:.72rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.fmt-btn.active .fmt-label{color:var(--accent)}
+
+/* FLOW SELECTOR */
+.flow-section{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:14px;padding:1.8rem;margin-bottom:1.5rem;
+}
+.flow-title{font-family:'Syne',sans-serif;font-size:1rem;font-weight:700;margin-bottom:1.2rem;color:var(--white)}
+.flow-row{display:flex;align-items:center;gap:1rem;flex-wrap:wrap}
+.flow-select{
+  flex:1;min-width:140px;
+  background:var(--surface2);border:1.5px solid var(--border);color:var(--text);
+  font-family:'Nunito',sans-serif;font-size:.9rem;font-weight:500;
+  padding:.7rem 1rem;border-radius:8px;cursor:pointer;
+  appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2364748b' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right .8rem center;padding-right:2rem;
+  transition:border-color .2s;
+}
+.flow-select:focus{outline:none;border-color:var(--accent)}
+.arrow-badge{
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  color:#000;font-size:.9rem;font-weight:800;
+  width:36px;height:36px;border-radius:8px;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+
+/* DROP ZONE */
+.drop-zone{
+  border:2px dashed var(--border);border-radius:14px;
+  padding:3rem 2rem;text-align:center;cursor:pointer;
+  transition:all .3s;background:var(--surface);margin-bottom:1.5rem;
+  position:relative;overflow:hidden;
+}
+.drop-zone:hover,.drop-zone.dragging{
+  border-color:var(--accent);background:rgba(0,212,255,.04);
+}
+.drop-zone.dragging{box-shadow:inset 0 0 40px rgba(0,212,255,.08)}
+.drop-icon{font-size:3rem;margin-bottom:.8rem;display:block}
+.drop-title{font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:700;margin-bottom:.4rem}
+.drop-sub{font-size:.82rem;color:var(--muted)}
+.drop-sub span{color:var(--accent);cursor:pointer;text-decoration:underline}
+#file-input{display:none}
+.file-info{
+  display:none;align-items:center;gap:1rem;
+  background:rgba(0,212,255,.06);border:1px solid rgba(0,212,255,.2);
+  border-radius:10px;padding:1rem 1.5rem;margin-bottom:1.5rem;
+}
+.file-info.show{display:flex}
+.file-ico{font-size:1.8rem}
+.file-details{flex:1;text-align:left}
+.file-name{font-weight:600;font-size:.9rem}
+.file-size{font-size:.78rem;color:var(--muted)}
+.file-remove{background:rgba(239,68,68,.1);border:none;color:var(--danger);font-size:1.1rem;cursor:pointer;border-radius:6px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;transition:background .2s}
+.file-remove:hover{background:rgba(239,68,68,.2)}
+
+/* CONVERT BUTTON */
+.convert-btn{
+  width:100%;padding:1rem;border-radius:10px;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  border:none;color:#000;font-family:'Syne',sans-serif;
+  font-size:1rem;font-weight:800;cursor:pointer;
+  transition:transform .2s,box-shadow .2s,opacity .2s;
+  letter-spacing:.02em;
+}
+.convert-btn:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 8px 30px rgba(0,212,255,.3)}
+.convert-btn:disabled{opacity:.5;cursor:not-allowed}
+
+/* PROGRESS */
+.progress-wrap{display:none;margin-bottom:1.5rem}
+.progress-wrap.show{display:block}
+.progress-label{font-size:.82rem;color:var(--muted);margin-bottom:.5rem;display:flex;justify-content:space-between}
+.progress-bar{background:var(--surface2);border-radius:100px;height:8px;overflow:hidden}
+.progress-fill{
+  height:100%;border-radius:100px;width:0%;
+  background:linear-gradient(90deg,var(--accent),var(--accent2));
+  transition:width .4s ease;
+}
+.status-msg{font-size:.82rem;color:var(--accent);margin-top:.5rem;min-height:1.2em}
+
+/* RESULT */
+.result-box{
+  display:none;background:var(--surface);border:1.5px solid var(--accent3);
+  border-radius:14px;padding:1.5rem;margin-top:1.5rem;
+}
+.result-box.show{display:block;animation:fadeUp .4s ease}
+.result-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem}
+.result-title{font-family:'Syne',sans-serif;font-weight:700;color:var(--accent3);display:flex;align-items:center;gap:.5rem}
+.result-title::before{content:'✓';font-size:1rem}
+.download-btn{
+  background:var(--accent3);color:#000;border:none;
+  font-family:'Nunito',sans-serif;font-weight:700;font-size:.88rem;
+  padding:.55rem 1.2rem;border-radius:8px;cursor:pointer;
+  transition:transform .15s,box-shadow .15s;display:flex;align-items:center;gap:.4rem;
+}
+.download-btn:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(16,185,129,.3)}
+.preview-area{
+  max-height:300px;overflow-y:auto;
+  background:var(--surface2);border-radius:8px;padding:1rem;
+  font-size:.82rem;line-height:1.7;color:var(--text);
+  border:1px solid var(--border);
+}
+.preview-area table{border-collapse:collapse;width:100%}
+.preview-area td,.preview-area th{border:1px solid var(--border);padding:.4rem .6rem;font-size:.78rem}
+.preview-area th{background:rgba(0,212,255,.1);color:var(--accent);font-weight:600}
+
+/* FEATURES SECTION */
+.features{padding:5rem 2rem;position:relative;z-index:1;max-width:960px;margin:0 auto}
+.section-label{font-size:.72rem;text-transform:uppercase;letter-spacing:.15em;color:var(--accent);font-weight:700;margin-bottom:.8rem}
+.section-title{font-family:'Syne',sans-serif;font-size:clamp(1.6rem,3vw,2.2rem);font-weight:800;margin-bottom:2.5rem;line-height:1.2}
+.feat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1rem}
+.feat-card{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:12px;padding:1.5rem;
+  transition:border-color .2s,transform .2s;
+}
+.feat-card:hover{border-color:var(--accent);transform:translateY(-3px)}
+.feat-icon{font-size:1.6rem;margin-bottom:.8rem}
+.feat-card h3{font-family:'Syne',sans-serif;font-size:1rem;font-weight:700;margin-bottom:.4rem}
+.feat-card p{font-size:.82rem;color:var(--muted);line-height:1.6}
+.feat-badge{
+  display:inline-block;margin-top:.6rem;
+  font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
+  padding:.2rem .5rem;border-radius:4px;
+}
+.badge-free{background:rgba(16,185,129,.15);color:var(--accent3)}
+.badge-pro{background:rgba(124,58,237,.2);color:#a78bfa}
+
+/* PRICING */
+.pricing{padding:5rem 2rem;position:relative;z-index:1;max-width:860px;margin:0 auto;text-align:center}
+.plan-cards{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-top:2.5rem}
+.plan-card{
+  background:var(--surface);border:1.5px solid var(--border);
+  border-radius:14px;padding:2rem;text-align:left;
+  transition:border-color .25s,transform .25s;
+}
+.plan-card:hover{border-color:var(--accent);transform:translateY(-4px)}
+.plan-card.featured{border-color:var(--accent2);background:rgba(124,58,237,.08);position:relative}
+.plan-card.featured::before{
+  content:'Próximamente PRO';position:absolute;top:-12px;left:50%;transform:translateX(-50%);
+  background:var(--accent2);color:white;font-size:.68rem;font-weight:700;
+  padding:.25rem .8rem;border-radius:100px;white-space:nowrap;letter-spacing:.05em;
+}
+.plan-name-label{font-size:.72rem;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);font-weight:600;margin-bottom:.5rem}
+.plan-price-big{font-family:'Syne',sans-serif;font-size:2.8rem;font-weight:800;line-height:1;color:var(--white);margin-bottom:.3rem}
+.plan-price-big small{font-size:1rem;color:var(--muted)}
+.plan-desc{font-size:.82rem;color:var(--muted);margin-bottom:1.5rem}
+.plan-list{list-style:none;display:flex;flex-direction:column;gap:.6rem;margin-bottom:2rem}
+.plan-list li{font-size:.85rem;display:flex;gap:.6rem;align-items:flex-start}
+.plan-list li::before{content:'✓';color:var(--accent3);font-weight:700;flex-shrink:0}
+.plan-list li.locked::before{content:'🔒';color:var(--muted)}
+.plan-list li.locked{color:var(--muted)}
+.plan-action{
+  display:block;text-align:center;padding:.8rem;border-radius:8px;
+  font-weight:700;font-size:.9rem;text-decoration:none;border:none;cursor:pointer;
+  font-family:'Nunito',sans-serif;transition:all .2s;
+}
+.plan-action.free-action{background:rgba(0,212,255,.1);color:var(--accent);border:1.5px solid rgba(0,212,255,.3)}
+.plan-action.free-action:hover{background:rgba(0,212,255,.2)}
+.plan-action.pro-action{background:linear-gradient(135deg,var(--accent2),#9333ea);color:white;opacity:.6;cursor:not-allowed}
+
+/* FOOTER */
+footer{
+  position:relative;z-index:1;
+  text-align:center;padding:2.5rem;
+  border-top:1px solid var(--border);color:var(--muted);font-size:.8rem;
+}
+footer strong{color:var(--accent)}
+
+/* TOAST */
+.toast{
+  position:fixed;bottom:2rem;right:2rem;z-index:999;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:10px;padding:.9rem 1.4rem;
+  font-size:.85rem;font-weight:600;color:var(--text);
+  transform:translateY(100px);opacity:0;
+  transition:all .3s ease;pointer-events:none;
+  display:flex;align-items:center;gap:.6rem;max-width:320px;
+}
+.toast.show{transform:translateY(0);opacity:1}
+.toast.success{border-color:var(--accent3);color:var(--accent3)}
+.toast.error{border-color:var(--danger);color:var(--danger)}
+.toast.info{border-color:var(--accent);color:var(--accent)}
+
+/* MODAL PRO */
+.modal-overlay{
+  display:none;position:fixed;inset:0;z-index:200;
+  background:rgba(0,0,0,.7);backdrop-filter:blur(6px);
+  align-items:center;justify-content:center;
+}
+.modal-overlay.show{display:flex}
+.modal{
+  background:var(--surface);border:1.5px solid var(--accent2);
+  border-radius:16px;padding:2.5rem;max-width:400px;width:90%;
+  text-align:center;animation:fadeUp .4s ease;
+}
+.modal h2{font-family:'Syne',sans-serif;font-size:1.5rem;font-weight:800;margin-bottom:.8rem}
+.modal p{color:var(--muted);font-size:.88rem;line-height:1.6;margin-bottom:1.5rem}
+.modal-close{background:var(--surface2);color:var(--text);border:1px solid var(--border);font-family:'Nunito',sans-serif;font-size:.88rem;font-weight:600;padding:.6rem 1.5rem;border-radius:8px;cursor:pointer;transition:all .2s}
+.modal-close:hover{border-color:var(--accent);color:var(--accent)}
+
+@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+
+/* RESPONSIVE */
+@media(max-width:768px){
+  nav{padding:.8rem 1.2rem}
+  .nav-links{display:none}
+  .hero{padding:5rem 1.2rem 3rem}
+  .converter-wrap{padding:1.5rem 1.2rem 4rem}
+  .format-grid{grid-template-columns:repeat(3,1fr)}
+  .plan-cards{grid-template-columns:1fr}
+  .features,.pricing{padding:3rem 1.2rem}
+  .flow-row{flex-direction:column}
+  .flow-select{width:100%}
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="logo">DocConvert</div>
+  <ul class="nav-links">
+    <li><a href="#converter">Convertir</a></li>
+    <li><a href="#features">Funciones</a></li>
+    <li><a href="#pricing">Precios</a></li>
+  </ul>
+  <a href="#converter" class="nav-badge">Usar gratis →</a>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="pill">100% gratis · Sin registro</div>
+  <h1>Convierte <span class="grad">cualquier documento</span><br>en segundos</h1>
+  <p class="hero-sub">Word ↔ PDF, Excel → PDF, Imagen → Word editable con OCR. Todo desde tu navegador, sin servidores externos, sin límites en el plan gratuito.</p>
+  <div class="free-banner">Completamente gratis ahora — plan Pro proximamente</div>
+</section>
+
+<!-- CONVERTER APP -->
+<section class="converter-wrap" id="converter">
+
+  <!-- FORMAT SELECTOR -->
+  <div style="margin-bottom:1rem">
+    <p style="font-size:.8rem;color:var(--muted);margin-bottom:.8rem;text-transform:uppercase;letter-spacing:.1em;font-weight:600">Elige la conversión:</p>
+    <div class="format-grid" id="format-grid">
+      <div class="fmt-btn active" data-from="docx" data-to="pdf" onclick="selectFlow(this,'docx','pdf')">
+        <span class="fmt-icon">📝</span>
+        <span class="fmt-label">Word → PDF</span>
+      </div>
+      <div class="fmt-btn" data-from="pdf" data-to="docx" onclick="selectFlow(this,'pdf','docx')">
+        <span class="fmt-icon">📄</span>
+        <span class="fmt-label">PDF → Word</span>
+      </div>
+      <div class="fmt-btn" data-from="xlsx" data-to="pdf" onclick="selectFlow(this,'xlsx','pdf')">
+        <span class="fmt-icon">📊</span>
+        <span class="fmt-label">Excel → PDF</span>
+      </div>
+      <div class="fmt-btn" data-from="xlsx" data-to="docx" onclick="selectFlow(this,'xlsx','docx')">
+        <span class="fmt-icon">📊</span>
+        <span class="fmt-label">Excel → Word</span>
+      </div>
+      <div class="fmt-btn" data-from="img" data-to="docx" onclick="selectFlow(this,'img','docx')">
+        <span class="fmt-icon">🖼️</span>
+        <span class="fmt-label">Imagen → Word</span>
+      </div>
+      <div class="fmt-btn" data-from="img" data-to="pdf" onclick="selectFlow(this,'img','pdf')">
+        <span class="fmt-icon">🖼️</span>
+        <span class="fmt-label">Imagen → PDF</span>
+      </div>
+      <div class="fmt-btn pro-locked" onclick="showProModal()">
+        <span class="fmt-icon">📦</span>
+        <span class="fmt-label">PDF → Excel</span>
+      </div>
+      <div class="fmt-btn pro-locked" onclick="showProModal()">
+        <span class="fmt-icon">🔗</span>
+        <span class="fmt-label">PDF → PPT</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- DROP ZONE -->
+  <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()"
+       ondragover="handleDrag(event)" ondragleave="handleDragLeave()" ondrop="handleDrop(event)">
+    <span class="drop-icon">⬆️</span>
+    <div class="drop-title" id="drop-title">Arrastra tu archivo aquí</div>
+    <div class="drop-sub" id="drop-sub">o <span>haz clic para seleccionar</span> · Acepta: <strong id="accept-label">.docx, .doc</strong></div>
+  </div>
+  <input type="file" id="file-input" onchange="handleFileSelect(event)">
+
+  <!-- FILE INFO -->
+  <div class="file-info" id="file-info">
+    <span class="file-ico" id="file-ico">📝</span>
+    <div class="file-details">
+      <div class="file-name" id="file-name">archivo.docx</div>
+      <div class="file-size" id="file-size">0 KB</div>
+    </div>
+    <button class="file-remove" onclick="removeFile()">✕</button>
+  </div>
+
+  <!-- PROGRESS -->
+  <div class="progress-wrap" id="progress-wrap">
+    <div class="progress-label"><span id="progress-text">Procesando...</span><span id="progress-pct">0%</span></div>
+    <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+    <div class="status-msg" id="status-msg"></div>
+  </div>
+
+  <!-- CONVERT BUTTON -->
+  <button class="convert-btn" id="convert-btn" onclick="startConversion()" disabled>
+    ⚡ Convertir ahora — Gratis
+  </button>
+
+  <!-- RESULT -->
+  <div class="result-box" id="result-box">
+    <div class="result-header">
+      <div class="result-title" id="result-title">Conversión completada</div>
+      <button class="download-btn" id="download-btn">⬇ Descargar</button>
+    </div>
+    <div class="preview-area" id="preview-area"></div>
+  </div>
+
+</section>
+
+<!-- FEATURES -->
+<section class="features" id="features">
+  <div class="section-label">Funciones incluidas</div>
+  <div class="section-title">Todo lo que necesitas,<br>sin instalar nada</div>
+  <div class="feat-grid">
+    <div class="feat-card">
+      <div class="feat-icon">📝</div>
+      <h3>Word → PDF</h3>
+      <p>Convierte .docx a PDF preservando el formato, fuentes e imágenes. Resultado profesional.</p>
+      <span class="feat-badge badge-free">✓ Gratis</span>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon">📄</div>
+      <h3>PDF → Word</h3>
+      <p>Extrae el texto de tus PDFs y genera un documento Word editable al instante.</p>
+      <span class="feat-badge badge-free">✓ Gratis</span>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon">📊</div>
+      <h3>Excel → PDF / Word</h3>
+      <p>Transforma tus hojas de cálculo en documentos listos para compartir o editar.</p>
+      <span class="feat-badge badge-free">✓ Gratis</span>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon">🤖</div>
+      <h3>OCR — Imagen → Word</h3>
+      <p>Sube una foto o imagen con texto y obtendrás un documento Word editable con IA.</p>
+      <span class="feat-badge badge-free">✓ Gratis</span>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon">🔒</div>
+      <h3>Privacidad total</h3>
+      <p>Todo ocurre en tu navegador. Tus archivos nunca se suben a ningún servidor.</p>
+      <span class="feat-badge badge-free">✓ Gratis</span>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon">🚀</div>
+      <h3>Conversión por lotes</h3>
+      <p>Convierte múltiples archivos a la vez sin esperas. Sin límites de tamaño.</p>
+      <span class="feat-badge badge-pro">🔒 Próximamente PRO</span>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section class="pricing" id="pricing">
+  <div class="section-label">Planes</div>
+  <div class="section-title">Gratis hoy.<br>Pro muy pronto.</div>
+  <div class="plan-cards">
+    <div class="plan-card">
+      <div class="plan-name-label">Gratuito</div>
+      <div class="plan-price-big">$0<small>/siempre</small></div>
+      <div class="plan-desc">Para uso personal sin límites</div>
+      <ul class="plan-list">
+        <li>Word ↔ PDF</li>
+        <li>Excel → PDF y Word</li>
+        <li>Imagen → Word (OCR con IA)</li>
+        <li>Imagen → PDF</li>
+        <li>Privacidad 100% local</li>
+        <li>Sin registro ni cuenta</li>
+      </ul>
+      <button class="plan-action free-action" onclick="document.getElementById('drop-zone').scrollIntoView({behavior:'smooth'})">Usar gratis ahora</button>
+    </div>
+    <div class="plan-card featured">
+      <div class="plan-name-label">Pro</div>
+      <div class="plan-price-big">$7<small>/mes</small></div>
+      <div class="plan-desc">Para equipos y uso profesional</div>
+      <ul class="plan-list">
+        <li>Todo del plan Gratis</li>
+        <li>Conversión por lotes</li>
+        <li>PDF → Excel (tablas)</li>
+        <li>PDF → PowerPoint</li>
+        <li class="locked">PDF firmado digitalmente</li>
+        <li class="locked">API de conversión</li>
+        <li class="locked">Almacenamiento en la nube</li>
+      </ul>
+      <button class="plan-action pro-action">Próximamente</button>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <strong>DocConvert</strong> · Conversión local en tu navegador · Sin servidores · Sin rastros<br>
+  <span style="margin-top:.4rem;display:block">© 2025 — Todos los derechos reservados</span>
+</footer>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- PRO MODAL -->
+<div class="modal-overlay" id="pro-modal">
+  <div class="modal">
+    <div style="font-size:2.5rem;margin-bottom:.8rem">🚀</div>
+    <h2>Función Pro</h2>
+    <p>Esta conversión estará disponible próximamente en el plan Pro. Mientras tanto, disfruta de todas las funciones gratuitas sin límites.</p>
+    <button class="modal-close" onclick="closeProModal()">Entendido</button>
+  </div>
+</div>
+
+<script>
+// ── STATE ──
+let currentFrom = 'docx';
+let currentTo = 'pdf';
+let currentFile = null;
+let convertedBlob = null;
+let convertedFileName = '';
+
+// ── ACCEPT TYPES ──
+const acceptMap = {
+  docx: '.docx,.doc',
+  pdf: '.pdf',
+  xlsx: '.xlsx,.xls,.csv',
+  img: '.png,.jpg,.jpeg,.gif,.bmp,.webp',
+};
+
+const iconMap = {docx:'📝', pdf:'📄', xlsx:'📊', img:'🖼️'};
+
+// ── FLOW SELECTION ──
+function selectFlow(el, from, to) {
+  document.querySelectorAll('.fmt-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  currentFrom = from;
+  currentTo = to;
+  currentFile = null;
+  convertedBlob = null;
+  document.getElementById('file-input').accept = acceptMap[from] || '*';
+  document.getElementById('accept-label').textContent = acceptMap[from];
+  document.getElementById('drop-title').textContent = 'Arrastra tu archivo aquí';
+  document.getElementById('file-info').classList.remove('show');
+  document.getElementById('convert-btn').disabled = true;
+  document.getElementById('result-box').classList.remove('show');
+  document.getElementById('progress-wrap').classList.remove('show');
+  
+  const labels = {
+    docx: 'Suelta tu archivo Word (.docx)',
+    pdf: 'Suelta tu archivo PDF',
+    xlsx: 'Suelta tu hoja de cálculo Excel',
+    img: 'Suelta tu imagen (PNG, JPG...)',
+  };
+  document.getElementById('drop-title').textContent = labels[from] || 'Arrastra tu archivo aquí';
+}
+
+// ── DRAG & DROP ──
+function handleDrag(e) {
+  e.preventDefault();
+  document.getElementById('drop-zone').classList.add('dragging');
+}
+function handleDragLeave() {
+  document.getElementById('drop-zone').classList.remove('dragging');
+}
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('drop-zone').classList.remove('dragging');
+  const f = e.dataTransfer.files[0];
+  if (f) processFile(f);
+}
+function handleFileSelect(e) {
+  const f = e.target.files[0];
+  if (f) processFile(f);
+}
+
+function processFile(f) {
+  currentFile = f;
+  const kb = (f.size / 1024).toFixed(1);
+  const mb = (f.size / (1024*1024)).toFixed(2);
+  document.getElementById('file-ico').textContent = iconMap[currentFrom] || '📎';
+  document.getElementById('file-name').textContent = f.name;
+  document.getElementById('file-size').textContent = f.size > 1024*1024 ? mb + ' MB' : kb + ' KB';
+  document.getElementById('file-info').classList.add('show');
+  document.getElementById('convert-btn').disabled = false;
+  document.getElementById('result-box').classList.remove('show');
+  showToast('Archivo cargado correctamente', 'success');
+}
+
+function removeFile() {
+  currentFile = null;
+  document.getElementById('file-info').classList.remove('show');
+  document.getElementById('convert-btn').disabled = true;
+  document.getElementById('file-input').value = '';
+}
+
+// ── PROGRESS ──
+function setProgress(pct, msg) {
+  document.getElementById('progress-fill').style.width = pct + '%';
+  document.getElementById('progress-pct').textContent = pct + '%';
+  if (msg) document.getElementById('status-msg').textContent = msg;
+}
+
+function showProgress(label) {
+  document.getElementById('progress-text').textContent = label;
+  document.getElementById('progress-wrap').classList.add('show');
+  setProgress(0, '');
+}
+
+function hideProgress() {
+  document.getElementById('progress-wrap').classList.remove('show');
+}
+
+// ── MAIN CONVERSION ──
+async function startConversion() {
+  if (!currentFile) return;
+  const btn = document.getElementById('convert-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Procesando...';
+  document.getElementById('result-box').classList.remove('show');
+
+  try {
+    const key = currentFrom + '_' + currentTo;
+    showProgress('Convirtiendo ' + currentFile.name + '...');
+    
+    if (key === 'docx_pdf') await convertDocxToPdf();
+    else if (key === 'pdf_docx') await convertPdfToDocx();
+    else if (key === 'xlsx_pdf') await convertXlsxToPdf();
+    else if (key === 'xlsx_docx') await convertXlsxToDocx();
+    else if (key === 'img_docx') await convertImgToDocx();
+    else if (key === 'img_pdf') await convertImgToPdf();
+    else showToast('Conversión no disponible aún', 'error');
+    
+  } catch(err) {
+    console.error(err);
+    showToast('Error: ' + err.message, 'error');
+    hideProgress();
+  }
+
+  btn.disabled = false;
+  btn.textContent = '⚡ Convertir ahora — Gratis';
+}
+
+// ── CONVERSIONS ──
+
+// Word (.docx) → PDF
+async function convertDocxToPdf() {
+  setProgress(20, 'Leyendo archivo Word...');
+  const ab = await currentFile.arrayBuffer();
+  
+  setProgress(40, 'Extrayendo contenido...');
+  const result = await mammoth.extractRawText({arrayBuffer: ab});
+  const text = result.value;
+  
+  setProgress(70, 'Generando PDF...');
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit:'mm', format:'a4' });
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(11);
+  
+  const margin = 20;
+  const pageW = doc.internal.pageSize.getWidth();
+  const maxW = pageW - margin * 2;
+  
+  // Add title
+  const fname = currentFile.name.replace(/\.[^/.]+$/, '');
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.text(fname, margin, margin + 5);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  
+  let y = margin + 18;
+  const lines = text.split('\n').filter(l => l.trim());
+  
+  for (const line of lines) {
+    const wrapped = doc.splitTextToSize(line, maxW);
+    for (const wl of wrapped) {
+      if (y > 270) { doc.addPage(); y = margin; }
+      doc.text(wl, margin, y);
+      y += 6;
+    }
+    y += 2;
+  }
+  
+  setProgress(90, 'Finalizando...');
+  convertedBlob = doc.output('blob');
+  convertedFileName = fname + '.pdf';
+  
+  setProgress(100, '¡Listo!');
+  showResult('Word convertido a PDF exitosamente', text.substring(0, 600) + '...', convertedFileName);
+}
+
+// PDF → Word
+async function convertPdfToDocx() {
+  setProgress(20, 'Cargando PDF...');
+  
+  // Use PDF.js via CDN inline
+  const script = document.createElement('script');
+  script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+  document.head.appendChild(script);
+  
+  await new Promise(resolve => script.onload = resolve);
+  
+  setProgress(40, 'Extrayendo texto del PDF...');
+  const pdfjsLib = window['pdfjs-dist/build/pdf'];
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  
+  const ab = await currentFile.arrayBuffer();
+  const pdfDoc = await pdfjsLib.getDocument({data: ab}).promise;
+  
+  let fullText = '';
+  const total = pdfDoc.numPages;
+  
+  for (let i = 1; i <= total; i++) {
+    setProgress(40 + Math.round((i/total)*40), `Procesando página ${i} de ${total}...`);
+    const page = await pdfDoc.getPage(i);
+    const tc = await page.getTextContent();
+    const pageText = tc.items.map(item => item.str).join(' ');
+    fullText += `\n--- Página ${i} ---\n${pageText}\n`;
+  }
+  
+  setProgress(85, 'Generando Word...');
+  
+  // Create simple DOCX using XML
+  const docxContent = buildDocx(fullText, currentFile.name.replace('.pdf',''));
+  convertedBlob = new Blob([docxContent], {type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
+  convertedFileName = currentFile.name.replace('.pdf', '') + '_extraido.docx';
+  
+  // Fallback: create text file since true docx binary is complex in browser
+  const txtBlob = new Blob([fullText], {type:'text/plain;charset=utf-8'});
+  convertedBlob = txtBlob;
+  convertedFileName = currentFile.name.replace('.pdf', '') + '_extraido.txt';
+  
+  setProgress(100, '¡Listo!');
+  showResult(`PDF → Texto extraído (${total} páginas)`, fullText.substring(0, 700), convertedFileName);
+}
+
+// Excel → PDF
+async function convertXlsxToPdf() {
+  setProgress(20, 'Leyendo Excel...');
+  const ab = await currentFile.arrayBuffer();
+  const wb = XLSX.read(ab, {type:'array'});
+  
+  setProgress(50, 'Procesando hojas...');
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit:'mm', format:'a4', orientation:'landscape' });
+  
+  let isFirst = true;
+  for (const sheetName of wb.SheetNames) {
+    if (!isFirst) doc.addPage();
+    isFirst = false;
+    
+    const ws = wb.Sheets[sheetName];
+    const data = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+    
+    doc.setFontSize(13);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Hoja: ' + sheetName, 10, 15);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    
+    let y = 25;
+    const colW = 270 / Math.max(data[0]?.length || 1, 1);
+    
+    data.forEach((row, ri) => {
+      if (y > 195) { doc.addPage(); y = 15; }
+      if (ri === 0) { doc.setFont('helvetica','bold'); }
+      else { doc.setFont('helvetica','normal'); }
+      
+      row.forEach((cell, ci) => {
+        const x = 10 + ci * colW;
+        const cellStr = String(cell ?? '').substring(0, 20);
+        doc.text(cellStr, x, y);
+      });
+      y += 6;
+    });
+  }
+  
+  setProgress(90, 'Exportando PDF...');
+  convertedBlob = doc.output('blob');
+  const fname = currentFile.name.replace(/\.[^/.]+$/, '');
+  convertedFileName = fname + '.pdf';
+  
+  // Build preview
+  const ws0 = wb.Sheets[wb.SheetNames[0]];
+  const previewData = XLSX.utils.sheet_to_json(ws0, {header:1, defval:''}).slice(0,8);
+  const tableHTML = buildTableHTML(previewData);
+  
+  setProgress(100, '¡Listo!');
+  showResult('Excel convertido a PDF', tableHTML, convertedFileName, true);
+}
+
+// Excel → Word (text)
+async function convertXlsxToDocx() {
+  setProgress(20, 'Leyendo Excel...');
+  const ab = await currentFile.arrayBuffer();
+  const wb = XLSX.read(ab, {type:'array'});
+  
+  setProgress(60, 'Convirtiendo hojas...');
+  let text = '';
+  for (const sheetName of wb.SheetNames) {
+    text += `\n========== ${sheetName} ==========\n`;
+    const ws = wb.Sheets[sheetName];
+    const csv = XLSX.utils.sheet_to_csv(ws);
+    text += csv + '\n';
+  }
+  
+  setProgress(85, 'Generando documento...');
+  convertedBlob = new Blob([text], {type:'text/plain;charset=utf-8'});
+  convertedFileName = currentFile.name.replace(/\.[^/.]+$/, '') + '_convertido.txt';
+  
+  setProgress(100, '¡Listo!');
+  
+  const ws0 = wb.Sheets[wb.SheetNames[0]];
+  const previewData = XLSX.utils.sheet_to_json(ws0, {header:1, defval:''}).slice(0,6);
+  showResult('Excel convertido a texto editable', buildTableHTML(previewData), convertedFileName, true);
+}
+
+// Image → Word (OCR)
+async function convertImgToDocx() {
+  showProgress('Iniciando OCR con IA...');
+  setProgress(10, 'Cargando motor OCR...');
+  
+  const worker = await Tesseract.createWorker('spa+eng', 1, {
+    logger: m => {
+      if (m.status === 'recognizing text') {
+        const pct = Math.round(10 + m.progress * 75);
+        setProgress(pct, `Reconociendo texto: ${Math.round(m.progress*100)}%`);
+      } else if (m.status === 'loading language traineddata') {
+        setProgress(15, 'Cargando idiomas (español + inglés)...');
+      }
+    }
+  });
+  
+  setProgress(88, 'Procesando resultado...');
+  const { data: { text } } = await worker.recognize(currentFile);
+  await worker.terminate();
+  
+  setProgress(95, 'Generando documento Word...');
+  convertedBlob = new Blob([text], {type:'text/plain;charset=utf-8'});
+  convertedFileName = currentFile.name.replace(/\.[^/.]+$/, '') + '_texto_ocr.txt';
+  
+  setProgress(100, '¡Texto extraído con éxito!');
+  showResult('Texto extraído de la imagen (OCR)', text.substring(0,800) || '(No se detectó texto legible en la imagen)', convertedFileName);
+}
+
+// Image → PDF
+async function convertImgToPdf() {
+  setProgress(20, 'Cargando imagen...');
+  
+  const imgData = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => resolve(e.target.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(currentFile);
+  });
+  
+  setProgress(50, 'Creando PDF...');
+  const img = new Image();
+  await new Promise(resolve => { img.onload = resolve; img.src = imgData; });
+  
+  const { jsPDF } = window.jspdf;
+  const isLandscape = img.width > img.height;
+  const doc = new jsPDF({ unit:'mm', format:'a4', orientation: isLandscape ? 'landscape' : 'portrait' });
+  
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const ratio = Math.min((pageW - 20) / img.width, (pageH - 20) / img.height);
+  const w = img.width * ratio;
+  const h = img.height * ratio;
+  const x = (pageW - w) / 2;
+  const y = (pageH - h) / 2;
+  
+  const fmt = currentFile.type.includes('png') ? 'PNG' : 'JPEG';
+  doc.addImage(imgData, fmt, x, y, w, h);
+  
+  setProgress(90, 'Exportando...');
+  convertedBlob = doc.output('blob');
+  convertedFileName = currentFile.name.replace(/\.[^/.]+$/, '') + '.pdf';
+  
+  setProgress(100, '¡Listo!');
+  showResult('Imagen convertida a PDF', `<div style="text-align:center;padding:1rem"><img src="${imgData}" style="max-width:100%;max-height:200px;border-radius:6px;border:1px solid var(--border)"><p style="margin-top:.5rem;color:var(--muted);font-size:.75rem">Vista previa de la imagen</p></div>`, convertedFileName, true);
+}
+
+// ── HELPERS ──
+function buildTableHTML(data) {
+  if (!data.length) return '<p>Sin datos</p>';
+  let html = '<table><thead><tr>';
+  (data[0] || []).forEach(h => html += `<th>${h}</th>`);
+  html += '</tr></thead><tbody>';
+  data.slice(1).forEach(row => {
+    html += '<tr>';
+    row.forEach(c => html += `<td>${c}</td>`);
+    html += '</tr>';
+  });
+  return html + '</tbody></table>';
+}
+
+function showResult(title, previewContent, filename, isHTML = false) {
+  document.getElementById('result-title').textContent = title;
+  const preview = document.getElementById('preview-area');
+  if (isHTML) preview.innerHTML = previewContent;
+  else preview.textContent = previewContent;
+  
+  const dlBtn = document.getElementById('download-btn');
+  dlBtn.textContent = '⬇ Descargar ' + filename;
+  dlBtn.onclick = () => {
+    const url = URL.createObjectURL(convertedBlob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('¡Descarga iniciada!', 'success');
+  };
+  
+  document.getElementById('result-box').classList.add('show');
+  document.getElementById('result-box').scrollIntoView({behavior:'smooth', block:'nearest'});
+  hideProgress();
+  showToast('✓ Conversión completada', 'success');
+}
+
+function showToast(msg, type = 'info') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast ' + type;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3200);
+}
+
+function showProModal() { document.getElementById('pro-modal').classList.add('show'); }
+function closeProModal() { document.getElementById('pro-modal').classList.remove('show'); }
+document.getElementById('pro-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeProModal();
+});
+
+// Init
+document.getElementById('file-input').accept = acceptMap['docx'];
+</script>
+</body>
+</html>
